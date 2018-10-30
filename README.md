@@ -15,8 +15,8 @@ There is `getaccountaddress` RPC method in Bitcoin API. It accepts `account` as 
 ## Implemented translations
 
 ```
-    RPC method     Description
-    ~~~~~~~~~~     ~~~~~~~~~~~
+    RPC method                       Description
+    ~~~~~~~~~~                       ~~~~~~~~~~~
     getinfo                      ->  RPCMASQ info
     getaccountaddress(account)   ->  make_integrated_address(payment_id(account))
     getbalance([account], [cnf]) -> get_balance([payment_id(account)])
