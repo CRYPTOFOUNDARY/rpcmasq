@@ -1,9 +1,12 @@
-import pdb, itertools, functools, hashlib, pprint, flask, flask_jsonrpc, toolz, json
+import pdb, itertools, functools, hashlib, pprint, flask, flask_jsonrpc, toolz, json, logging
 from monero import wallet, daemon, transaction
 from monero.backends import jsonrpc
 
 
 __VERSION__ = (0, 0, 1)
+
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 app = flask.Flask(__name__)
@@ -44,7 +47,15 @@ def listtransactions(account, limit=0):
 
 @rpc.method("gettransaction")
 def gettransaction(id):
-    return {"error": "not implemented"}
+    logging.info("\ngettransaction\n")
+    res = daemon_factory()._backend.raw_request(
+        "/get_transactions",
+        {
+            "txs_hashes": [str(id)],
+            "decode_as_json": True
+        }
+    )
+    return json.loads(res["txs"][0]["as_json"])
 
 
 def accountbalance(account):
