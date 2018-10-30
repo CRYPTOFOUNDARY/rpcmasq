@@ -2,6 +2,8 @@
 
 Transparent Bitcoin RPC API to Monero RPC API proxy server.
 
+![RPCMASQ](./masq.png)
+
 ## The idea
 
 A lot of projects including exchanges already works with Bitcoin RPC API but when you want to add new coin engine for example Monero or Ethereum you need to develop new integration and change every peace of code using RPC. It may be difficult specially when target project source is not too good or when project is too complex and large.
@@ -17,8 +19,8 @@ There is `getaccountaddress` RPC method in Bitcoin API. It accepts `account` as 
 ```
     RPC method                       Description
     ~~~~~~~~~~                       ~~~~~~~~~~~
-    getinfo                      ->  RPCMASQ info
-    getaccountaddress(account)   ->  make_integrated_address(payment_id(account))
+    getinfo                      -> RPCMASQ info
+    getaccountaddress(account)   -> make_integrated_address(payment_id(account))
     getbalance([account], [cnf]) -> get_balance([payment_id(account)])
     gettransaction(id)           -> /get_transactions([id])
     listtransactions(account)    -> transfers_in(payment_id(account))
