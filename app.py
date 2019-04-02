@@ -1,89 +1,85 @@
-import pdb, itertools, functools, hashlib, pprint, flask, flask_jsonrpc, toolz, json, logging
-from monero import wallet, daemon, transaction
-from monero.backends import jsonrpc
+import pdb, itertools, functools, hashlib, pprint, flask, flask_jsonrpc, toolz, json, logging, coloredlogs, os, api
 
 
-__VERSION__ = (0, 0, 1)
-
-
-logging.basicConfig(level=logging.DEBUG)
-
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+coloredlogs.install(fmt="%(asctime)-15s %(message)s", datefmt="%m/%d %H:%M:%S", logger=logger)
 app = flask.Flask(__name__)
-rpc = flask_jsonrpc.JSONRPC(app, "/json_rpc", enable_web_browsable_api=True)
-
-
-def wallet_factory():
-    return wallet.Wallet(jsonrpc.JSONRPCWallet(
-        port=18089,
-        user="monerorpc",
-        password="moneropassword",
-    ))
-
-
-def daemon_factory():
-    return daemon.Daemon(jsonrpc.JSONRPCDaemon(
-        host="107.150.28.134",
-        port=12561,
-    ))
-
-
-def hash(value, size=16):
-    return hashlib.md5(value.encode("utf8")).hexdigest()[:size]
+rpc = flask_jsonrpc.JSONRPC(app, "/", enable_web_browsable_api=True)
 
 
 @rpc.method("getinfo")
 def getinfo():
+    logger.info("info")
+    logger.warning("warn")
+    logger.error("err")
     return {
-        "name": "RPC Masq v{}.{}.{}".format(*__VERSION__),
+        "name": "RPC Masq v{}.{}.{}".format(*api.__VERSION__),
         "plugins": ["monero", ],
     }
 
 
 @rpc.method("listtransactions")
 def listtransactions(account, limit=0):
-    return [json.loads(json.dumps(_.__dict__, default=str)) for _ in wallet_factory()._backend.transfers_in(0, transaction.PaymentFilter(payment_id=hash(account)))]
+    return [
+        api.account_tx(account, api.get_account_address(account), "receive", data)
+        for data in api.get_transactions(account)
+    ]
+
+
+@rpc.method("move")
+def move(fromaccount, toaccount, amount, minconf=1, comment=None):
+    logger.warning("@move")
+    payments = api.storage_factory().payments
+    from_payments = list(
+        payments.find(
+            {"payment_id": "{:<064s}".format(
+                api.to_payment_id(fromaccount)
+            )}
+        )
+    )
+    move_payments = []
+    change = float(amount)
+
+    while change > 0 and from_payments:
+        move_payments.append(from_payments.pop())
+        change -= float(api.from_atomic(move_payments[-1]["amount"]))
+    logger.error("Change(%f, %s)", change, type(change))
+    if change == 0.0:
+        logger.error("@@move")
+        for payment in move_payments:
+            logger.info(pprint.pformat(payment))
+            api.storage_factory().payments.update_one(
+                {"_id": payment["_id"]},
+                {
+                    "$set": {
+                        "payment_id": "{:<064s}".format(
+                            api.to_payment_id(toaccount)
+                        )
+                    }
+                }
+            )
+        return "success"
+
+    return None
 
 
 @rpc.method("gettransaction")
-def gettransaction(id):
-    logging.info("\ngettransaction\n")
-    res = daemon_factory()._backend.raw_request(
-        "/get_transactions",
-        {
-            "txs_hashes": [str(id)],
-            "decode_as_json": True
-        }
+def gettransaction(tx_hash):
+    return api.tx(
+        api.storage_factory().payments.find_one({"tx_hash": tx_hash})
     )
-    return json.loads(res["txs"][0]["as_json"])
-
-
-def accountbalance(account):
-    value = str(functools.reduce(
-        lambda amount, el: amount + el.amount,
-        wallet_factory()._backend.transfers_in(0, transaction.PaymentFilter(payment_id=hash(account))),
-        0
-    ))
-    pprint.pprint(value)
-    return value
-
-
-def balance():
-    return wallet_factory().balance()
 
 
 @rpc.method("getbalance")
-def getbalance(account, confirmations=1):
-    return "%.12f" % balance() if account == "*" else accountbalance(account)
+def getbalance(account="*", confirmations=1):
+    return api.get_total_balance() if account == "*" else api.get_account_balance(account)
 
 
 @rpc.method("getaccountaddress")
 def getaccountaddress(account):
-    """{
-        "payment_id": hash(account),
-        "integrated_address": str(wallet_factory()._backend.raw_request("make_integrated_address", {"payment_id": hash(account)})["integrated_address"])
-    }"""
-    return str(wallet_factory()._backend.raw_request("make_integrated_address", {"payment_id": hash(account)})["integrated_address"])
+    return api.get_account_address(account)
 
 
+logger.info("Starting rpcMASQ v{}.{}.{}".format(*api.__VERSION__))
 app.run(debug=True)

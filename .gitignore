@@ -1,3 +1,5 @@
+rpc.credentials
+.vscode/
 venv/
 .idea/
 
